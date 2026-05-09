@@ -1,13 +1,16 @@
 [Unit]
 Description=Shared data partition (Android userdata)
-After=systemd-udev-settle.service
+DefaultDependencies=no
+After=local-fs-pre.target
+Before=local-fs.target umount.target
+Conflicts=umount.target
 
 [Mount]
 What=/dev/mmcblk2p15
 Where=/data
 Type=ext4
-Options=defaults,nofail,noatime
+Options=defaults,nofail,noatime,x-systemd.device-timeout=5s
 TimeoutSec=15
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=local-fs.target
