@@ -45,12 +45,12 @@ printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
 # binary is ~70 KB so source-build is cheaper than vendoring a deb.
 echo "==> building umtprd (uMTP-Responder)"
 apt-get install -y --no-install-recommends gcc make libc6-dev
-UMTP_VER=1.6.7
-curl -fsSL "https://github.com/viveris/uMTP-Responder/archive/refs/tags/v${UMTP_VER}.tar.gz" \
+UMTP_TAG=umtprd-1.8.1
+curl -fsSL "https://github.com/viveris/uMTP-Responder/archive/refs/tags/${UMTP_TAG}.tar.gz" \
     -o /tmp/umtp.tgz
 tar -xzf /tmp/umtp.tgz -C /tmp
-( cd /tmp/uMTP-Responder-${UMTP_VER} && make -j"$(nproc)" && make install )
-rm -rf /tmp/uMTP-Responder-${UMTP_VER} /tmp/umtp.tgz
+( cd /tmp/uMTP-Responder-${UMTP_TAG} && make -j"$(nproc)" && make install )
+rm -rf /tmp/uMTP-Responder-${UMTP_TAG} /tmp/umtp.tgz
 apt-get purge -y gcc make libc6-dev
 apt-get autoremove -y --purge
 
