@@ -4,3 +4,4 @@ out/*
 *.tar.gz
 *.cpio.gz
 ssh-keys/
+authorized_keys

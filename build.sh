@@ -75,14 +75,18 @@ install -m 0755 "$ROOT_DIR/chroot-setup.sh"  "$ROOTFS/tmp/chroot-setup.sh"
 # 5a. Optional SSH pubkey injection. Device generates its own host privkey
 #     on first boot (chroot-setup.sh runs `ssh-keygen -A`); we just slip in
 #     the operator's pubkey so root login works out of the box.
-if [ -n "${TC8_SSH_PUBKEY:-}" ]; then
-    if [ -f "$TC8_SSH_PUBKEY" ]; then
-        echo "==> baking SSH pubkey from $TC8_SSH_PUBKEY"
+#     Source order: TC8_SSH_PUBKEY env wins, else ./authorized_keys at repo
+#     root if it exists (gitignored — drop your pubkey there).
+SSH_PUBKEY_SRC="${TC8_SSH_PUBKEY:-}"
+[ -z "$SSH_PUBKEY_SRC" ] && [ -f "$ROOT_DIR/authorized_keys" ] && SSH_PUBKEY_SRC="$ROOT_DIR/authorized_keys"
+if [ -n "$SSH_PUBKEY_SRC" ]; then
+    if [ -f "$SSH_PUBKEY_SRC" ]; then
+        echo "==> baking SSH pubkey from $SSH_PUBKEY_SRC"
         install -d -m 0700 "$ROOTFS/root/.ssh"
-        cat "$TC8_SSH_PUBKEY" >> "$ROOTFS/root/.ssh/authorized_keys"
+        cat "$SSH_PUBKEY_SRC" >> "$ROOTFS/root/.ssh/authorized_keys"
         chmod 0600 "$ROOTFS/root/.ssh/authorized_keys"
     else
-        echo "warning: TC8_SSH_PUBKEY=$TC8_SSH_PUBKEY not found, skipping" >&2
+        echo "warning: pubkey source $SSH_PUBKEY_SRC not found, skipping" >&2
     fi
 fi
 
