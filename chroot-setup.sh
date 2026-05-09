@@ -50,6 +50,12 @@ fi
 
 echo 'tc8-kiosk' > /etc/hostname
 
+# Locale: pre-generate en_US.UTF-8 so PAM/openssh stop logging
+# "Unable to open env file: /etc/default/locale" on every login.
+echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen
+locale-gen en_US.UTF-8 >/dev/null 2>&1 || true
+echo 'LANG=en_US.UTF-8' > /etc/default/locale
+
 # Network + resolv stub.
 ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 

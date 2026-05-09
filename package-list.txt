@@ -50,3 +50,7 @@ less
 curl
 ca-certificates
 busybox-static
+# polish: silences pam_env warning, persists clock across reboots
+# without an RTC (so HTTPS works before NTP catches up)
+locales
+fake-hwclock
