@@ -29,6 +29,19 @@ PKGS=$(sed -e 's/#.*$//' -e '/^[[:space:]]*$/d' "$PKG_LIST" | tr '\n' ' ')
 # shellcheck disable=SC2086
 apt-get install -y --no-install-recommends $PKGS
 
+# Build + install uMTP-Responder (umtprd) from source. Not in Debian; the
+# binary is ~70 KB so source-build is cheaper than vendoring a deb.
+echo "==> building umtprd (uMTP-Responder)"
+apt-get install -y --no-install-recommends gcc make libc6-dev
+UMTP_VER=1.6.7
+curl -fsSL "https://github.com/viveris/uMTP-Responder/archive/refs/tags/v${UMTP_VER}.tar.gz" \
+    -o /tmp/umtp.tgz
+tar -xzf /tmp/umtp.tgz -C /tmp
+( cd /tmp/uMTP-Responder-${UMTP_VER} && make -j"$(nproc)" && make install )
+rm -rf /tmp/uMTP-Responder-${UMTP_VER} /tmp/umtp.tgz
+apt-get purge -y gcc make libc6-dev
+apt-get autoremove -y --purge
+
 # Cache + locale + static-archive cleanup.
 apt-get clean
 rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
@@ -77,6 +90,7 @@ systemctl enable kiosk.service
 # Plug the data port into a host -> /dev/ttyACM0 with a getty waiting.
 systemctl enable tc8-usb-gadget.service
 systemctl enable serial-getty@ttyGS0.service
+systemctl enable tc8-mtp.service
 systemctl set-default graphical.target
 
 # Install the USB gadget setup script (configfs dance for CDC ACM + CDC NCM).
@@ -86,10 +100,15 @@ cat > /usr/local/sbin/tc8-usb-gadget.sh <<'GADGET'
 # tc8-usb-gadget.sh — composite USB gadget for the panel's data port:
 #   - CDC ACM  -> /dev/ttyACM0 on host (root login via serial-getty@ttyGS0)
 #   - CDC NCM  -> usb0 on host (network 10.55.0.0/24; panel at 10.55.0.1)
-# Plug the data port into a host and you get both: a serial console AND
-# a network link for ssh/scp/sshfs/etc.
+#   - MTP/FFS  -> "Portable Device" on host, served by umtprd (tc8-mtp.service)
+#
+# This script ONLY assembles the gadget tree and mounts FunctionFS; it
+# leaves UDC unbound. tc8-mtp.service starts umtprd, which opens the FFS
+# endpoints, then writes UDC in its ExecStartPost — that's the only safe
+# order with FFS-based functions.
 set -eu
 GADGET=/sys/kernel/config/usb_gadget/g1
+FFS_DIR=/dev/ffs-mtp
 mountpoint -q /sys/kernel/config || mount -t configfs none /sys/kernel/config
 [ -e "$GADGET/UDC" ] && [ -s "$GADGET/UDC" ] && exit 0
 mkdir -p "$GADGET" && cd "$GADGET"
@@ -134,16 +153,79 @@ echo "$DEV_MAC"  > functions/ncm.usb0/dev_addr   # MAC seen on the panel side (u
 echo "$HOST_MAC" > functions/ncm.usb0/host_addr  # MAC the host's usb-net iface gets
 ln -sf functions/ncm.usb0 configs/c.1/
 
-UDC="$(ls /sys/class/udc 2>/dev/null | head -n1)"
-[ -n "$UDC" ] || { echo "tc8-usb-gadget: no UDC available" >&2; exit 1; }
-echo "$UDC" > UDC
-echo "tc8-usb-gadget: bound $UDC; ttyGS0 + usb0 ready"
+# Function 3: FunctionFS instance for MTP. The ffs.<name>/ directory must
+# match the mount tag and the daemon's expected path. umtprd attaches in
+# tc8-mtp.service after this script exits.
+mkdir -p functions/ffs.mtp
+ln -sf functions/ffs.mtp configs/c.1/
+mkdir -p "$FFS_DIR"
+mountpoint -q "$FFS_DIR" || mount -t functionfs mtp "$FFS_DIR"
+
+# Do NOT bind UDC here — FFS endpoints aren't ready until umtprd opens
+# /dev/ffs-mtp/ep0. tc8-mtp.service's ExecStartPost writes UDC.
+echo "tc8-usb-gadget: gadget assembled (ACM + NCM + FFS); awaiting umtprd"
 GADGET
 chmod 0755 /usr/local/sbin/tc8-usb-gadget.sh
 
 # Network config for the NCM-side usb0 interface (panel = 10.55.0.1/24).
 # Host is expected to take 10.55.0.2 (or run dhclient if you add a server later).
 install -d -m 0755 /etc/systemd/network
+# umtprd config — exports /data as a single MTP storage to the host.
+install -d -m 0755 /etc/umtprd
+cat > /etc/umtprd/umtprd.conf <<'UMTP'
+# uMTP-Responder config for the TC8 panel.
+# /data is the eMMC userdata partition (Android-format ext4 quota).
+usb_vendor_id    = 0x1d6b
+usb_product_id   = 0x0104
+usb_class        = 0x00
+usb_subclass     = 0x00
+usb_protocol     = 0x00
+usb_dev_version  = 0x0100
+usb_max_packet_size = 0x40
+
+manufacturer = "Polycom"
+product      = "TC8 Panel Storage"
+serial       = "TC8"
+
+# storage = <path>, <description>, <flags>
+# flags: locked | always_locked | read_only | (empty for rw)
+storage = "/data", "Panel storage",
+
+# Stay attached after first transfer
+loop_on_unlock = no
+UMTP
+
+# tc8-mtp.service: starts umtprd, then binds the gadget UDC. Order
+# matters: umtprd must register FFS endpoints before UDC is bound.
+cat > /etc/systemd/system/tc8-mtp.service <<'MTP'
+[Unit]
+Description=TC8 MTP responder (umtprd over FunctionFS)
+Requires=tc8-usb-gadget.service
+After=tc8-usb-gadget.service
+ConditionPathExists=/dev/ffs-mtp/ep0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/umtprd -c /etc/umtprd/umtprd.conf
+# Once umtprd has the FFS endpoints open, bind the composite gadget to its
+# UDC. UDC writes return -ENODEV until all functions are ready, so retry.
+ExecStartPost=/bin/sh -c '\
+    UDC=$(ls /sys/class/udc | head -n1); \
+    GADGET_UDC=/sys/kernel/config/usb_gadget/g1/UDC; \
+    for _ in 1 2 3 4 5 6 7 8 9 10; do \
+        echo "$UDC" > "$GADGET_UDC" 2>/dev/null && exit 0; \
+        sleep 0.2; \
+    done; \
+    echo "tc8-mtp: failed to bind UDC after 2s" >&2; \
+    exit 1'
+ExecStopPost=/bin/sh -c 'echo "" > /sys/kernel/config/usb_gadget/g1/UDC 2>/dev/null || true'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+MTP
+
 cat > /etc/systemd/network/usb0.network <<'NW'
 [Match]
 Name=usb0
