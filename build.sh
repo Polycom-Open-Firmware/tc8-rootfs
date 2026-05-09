@@ -79,8 +79,8 @@ rsync -a "$ROOT_DIR/etc/" "$ROOTFS/etc/"
 
 
 # Bind /proc /sys /dev for chroot-setup's apt + ssh-keygen.
-mount -t proc  proc  "$ROOTFS/proc"
-mount -t sysfs sys   "$ROOTFS/sys"
+mount --bind /proc "$ROOTFS/proc"
+mount --bind /sys "$ROOTFS/sys"
 mount --bind   /dev  "$ROOTFS/dev"
 mount -t devpts devpts "$ROOTFS/dev/pts" || true
 trap 'umount -lf "$ROOTFS/dev/pts" 2>/dev/null || true; \
