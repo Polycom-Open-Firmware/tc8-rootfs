@@ -23,6 +23,10 @@ Environment=XDG_SESSION_TYPE=wayland
 Environment=XDG_CACHE_HOME=/data/kiosk/cache
 Environment=XDG_DATA_HOME=/data/kiosk/share
 Environment=COG_PLATFORM_FDO_VIEW_FULLSCREEN=1
+# wlroots picks /dev/dri/card0 by default which on i.MX 8M Mini is the
+# etnaviv GPU node (no connectors). card1 is the mxsfb display with our
+# DSI panel — point wlroots at it.
+Environment=WLR_DRM_DEVICES=/dev/dri/card1
 ExecStartPre=/bin/sh -c "mountpoint -q /data || mount /dev/mmcblk2p15 /data || true"
 ExecStartPre=/bin/sh -c "install -d -o kiosk -g kiosk -m 0700 /run/user/1000 /data/kiosk/cache /data/kiosk/share || true"
 ExecStart=/bin/sh -c "exec /usr/bin/cage -r -s -- /usr/bin/cog ${COG_OPTS} \"${KIOSK_URL:-https://duckduckgo.com/}\""
