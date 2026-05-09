@@ -7,6 +7,7 @@ systemd
 systemd-sysv
 systemd-resolved
 systemd-timesyncd
+udev
 dbus
 libnss-systemd
 
