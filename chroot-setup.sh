@@ -93,6 +93,16 @@ sed -i 's/^#\?Storage=.*/Storage=volatile/' /etc/systemd/journald.conf
 # /data mountpoint exists in the rootfs so `data.mount` has a target.
 mkdir -p /data
 
+# Default ALSA state — caps Master/Speaker at known-safe levels (Master 75%,
+# Speaker 85% ≈ -3 dB total through-chain). At full +24 dB the TAS5751 amp
+# pulls enough current on certain content to brown out the panel and reboot
+# it; this default keeps it audible without going there. alsa-restore.service
+# applies this on every boot. Users can crank above it at runtime if they
+# want, but the default after reflash/factory-reset is sane.
+mkdir -p /var/lib/alsa
+install -m 0644 /etc/asound.state.default /var/lib/alsa/asound.state
+systemctl enable alsa-restore.service
+
 # Enable services.
 systemctl enable systemd-networkd
 systemctl enable systemd-resolved
