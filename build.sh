@@ -115,6 +115,18 @@ EOF
 echo "==> applying etc/ overlay"
 rsync -a "$ROOT_DIR/etc/" "$ROOTFS/etc/"
 
+# 5c. Version stamp. firmware-build's top-level build.sh exports these so
+# the image self-identifies. Stand-alone rootfs builds get "standalone".
+cat > "$ROOTFS/etc/tc8-version" <<VER
+# tc8-firmware version metadata. Sourceable as shell.
+TC8_FW_VERSION="${TC8_FW_VERSION:-standalone}"
+TC8_ROOTFS_VERSION="${TC8_ROOTFS_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo standalone)}"
+TC8_PATCHES_VERSION="${TC8_PATCHES_VERSION:-unknown}"
+TC8_BUILD_DATE="${TC8_BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+TC8_BUILD_HOST="${TC8_BUILD_HOST:-$(hostname)}"
+VER
+chmod 0644 "$ROOTFS/etc/tc8-version"
+
 
 # Bind /proc /sys /dev for chroot-setup's apt + ssh-keygen.
 mount --bind /proc "$ROOTFS/proc"
