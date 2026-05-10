@@ -105,7 +105,7 @@ systemctl enable kiosk.service
 # Plug the data port into a host -> /dev/ttyACM0 with a getty waiting.
 systemctl enable tc8-usb-gadget.service
 systemctl enable serial-getty@ttyGS0.service
-systemctl enable tc8-mtp.service
+# tc8-mtp.service is enabled below, after we write its unit file inline.
 systemctl set-default graphical.target
 
 # Install the USB gadget setup script (configfs dance for CDC ACM + CDC NCM).
@@ -240,6 +240,8 @@ RestartSec=2
 [Install]
 WantedBy=multi-user.target
 MTP
+# Now that tc8-mtp.service exists, enable it.
+systemctl enable tc8-mtp.service
 
 cat > /etc/systemd/network/usb0.network <<'NW'
 [Match]
