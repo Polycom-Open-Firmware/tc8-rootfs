@@ -49,8 +49,11 @@ UMTP_TAG=umtprd-1.8.1
 curl -fsSL "https://github.com/viveris/uMTP-Responder/archive/refs/tags/${UMTP_TAG}.tar.gz" \
     -o /tmp/umtp.tgz
 tar -xzf /tmp/umtp.tgz -C /tmp
-( cd /tmp/uMTP-Responder-${UMTP_TAG} && make -j"$(nproc)" && make install )
-rm -rf /tmp/uMTP-Responder-${UMTP_TAG} /tmp/umtp.tgz
+# Upstream Makefile has no `install` target; do it by hand.
+( cd "/tmp/uMTP-Responder-${UMTP_TAG}" \
+  && make -j"$(nproc)" \
+  && install -m 0755 umtprd /usr/bin/umtprd )
+rm -rf "/tmp/uMTP-Responder-${UMTP_TAG}" /tmp/umtp.tgz
 apt-get purge -y gcc make libc6-dev
 apt-get autoremove -y --purge
 
