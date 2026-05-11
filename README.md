@@ -107,10 +107,12 @@ then calls this script with `BUSYBOX=work/rootfs/usr/bin/busybox`.
 
 ## Known limitations
 
-- No automatic touch calibration; runtime rotation is handled by cage
-  via `-r` and wlroots auto-maps the single-output touch transform.
-  See `tc8-kernel-patches` README for why kernel-level rotation is
-  not used.
+- No automatic touch calibration; final viewing rotation is the sum of
+  the kernel cmdline `video=DSI-1:rotate=270` (panel mounted 270° from
+  native) and cage's `-r -r` (180° CW in the compositor). wlroots
+  auto-maps the single-output touch transform off the wayland output
+  rotation. If you change either piece, re-run the orientation sweep
+  with `tc8-firmware-build/tools/orient.html`.
 - Shared SSH host keys (see above)
 - No NTP fallback if the network has no internet — boot clock is
   whatever the kernel set; HTTPS in cog will fail until `timesyncd`

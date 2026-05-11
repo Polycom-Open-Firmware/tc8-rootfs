@@ -103,6 +103,28 @@ mkdir -p /var/lib/alsa
 install -m 0644 /etc/asound.state.default /var/lib/alsa/asound.state
 systemctl enable alsa-restore.service
 
+# Force a fresh DHCPDISCOVER on every cold boot rather than letting
+# networkd unicast-renew a stale lease file (which can take 5+ min to
+# fall back to broadcast on a network where the old gateway is gone —
+# e.g. when the panel moves between LANs). Cheap to do; lease state is
+# trivially regenerable.
+cat > /etc/systemd/system/wipe-networkd-leases.service <<'UNIT'
+[Unit]
+Description=Wipe systemd-networkd lease/state cache before networkd starts
+DefaultDependencies=no
+Before=systemd-networkd.service
+ConditionPathExists=/var/lib/systemd/network
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'rm -rf /var/lib/systemd/network/*'
+RemainAfterExit=no
+
+[Install]
+WantedBy=systemd-networkd.service
+UNIT
+systemctl enable wipe-networkd-leases.service
+
 # Enable services.
 systemctl enable systemd-networkd
 systemctl enable systemd-resolved

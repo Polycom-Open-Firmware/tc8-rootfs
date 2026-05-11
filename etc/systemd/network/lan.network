@@ -6,7 +6,15 @@ DHCP=ipv4
 LinkLocalAddressing=ipv6
 DNS=1.1.1.1
 DNS=8.8.8.8
+# Drop the cached lease on any carrier loss so a port flap (e.g. PoE
+# cycle, switch VLAN re-jig) forces a fresh DHCPDISCOVER instead of
+# silently renewing the previous network's lease.
+IgnoreCarrierLoss=no
+KeepConfiguration=no
 
-[DHCP]
+[DHCPv4]
 UseDNS=true
 UseHostname=false
+# Release the lease cleanly on shutdown so the next boot starts fresh
+# instead of trying to renew a lease the new network knows nothing about.
+SendRelease=yes
