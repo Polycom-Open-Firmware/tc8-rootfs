@@ -54,3 +54,9 @@ busybox-static
 # without an RTC (so HTTPS works before NTP catches up)
 locales
 fake-hwclock
+
+# u-boot env editing from running Linux — lets us tweak tc8_bootargs /
+# boot_slot without dropping to the u-boot prompt over serial. Reads via
+# /etc/fw_env.config (baked by chroot-setup.sh) which points at the
+# eMMC's u-boot env block on /dev/mmcblk2boot1.
+u-boot-tools

@@ -87,6 +87,20 @@ echo 'LANG=en_US.UTF-8' > /etc/default/locale
 # Network + resolv stub.
 ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 
+# u-boot environment editor config. The TC8 ships u-boot env on the eMMC
+# user area at byte offset 0x400000 (verified empirically by binary-scanning
+# a TC8 panel's dump). 64 KiB is the conventional env size for i.MX8MM
+# u-boot 2018 builds and matches what we saw in the dump.
+#
+# With this in place, `fw_setenv tc8_bootargs '...'` from running Linux
+# rewrites the kernel cmdline without dropping to the serial u-boot prompt.
+# Single env (no redundancy) — this u-boot doesn't keep a backup copy.
+cat > /etc/fw_env.config <<'EOF'
+# device      offset      env_size
+/dev/mmcblk2  0x400000    0x10000
+EOF
+chmod 0644 /etc/fw_env.config
+
 # Volatile journal — no eMMC writes for logs.
 sed -i 's/^#\?Storage=.*/Storage=volatile/' /etc/systemd/journald.conf
 
