@@ -1,0 +1,15 @@
+[Unit]
+Description=Apply TC8 config blob pushed to the cache partition (provisioning wizard)
+Documentation=file:///etc/tc8-config/apply-config.sh
+# Needs /dev/disk/by-partlabel + a writable /etc; runs before the kiosk reads its
+# env. Ordered before kiosk-config.service so a local /data override still wins.
+After=local-fs.target
+Before=kiosk-config.service kiosk.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/tc8-config/apply-config.sh
+
+[Install]
+WantedBy=multi-user.target
