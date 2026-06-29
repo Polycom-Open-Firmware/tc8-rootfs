@@ -153,6 +153,8 @@ systemctl enable seatd.service
 # tc8-config: apply a fastboot-pushed config blob from the cache partition first
 chmod 0755 /etc/tc8-config/apply-config.sh 2>/dev/null || true
 systemctl enable tc8-config.service
+chmod 0755 /etc/tc8-config/update-bootloader.sh 2>/dev/null || true
+systemctl enable tc8-update-bootloader.service
 systemctl enable kiosk-config.service
 systemctl enable kiosk-vt.service
 systemctl enable kiosk.service

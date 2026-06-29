@@ -1,0 +1,13 @@
+[Unit]
+Description=Update stage-2 bootloader (eMMC boot1) from a cache-staged image
+Documentation=file:///etc/tc8-config/update-bootloader.sh
+# Effective on the NEXT boot, so ordering is loose; run after config is applied.
+After=local-fs.target tc8-config.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/etc/tc8-config/update-bootloader.sh
+
+[Install]
+WantedBy=multi-user.target
