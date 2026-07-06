@@ -108,10 +108,12 @@ PermitRootLogin yes
 PasswordAuthentication yes
 EOF
 
-# 5. Config overlay — copy etc/ before chroot-setup so ssh-keygen -A and
-#    `systemctl enable` see our unit files / network config / udev rules.
+# 5. Config overlay — copy etc/ (and usr/, for local sbin helpers like
+#    tc8-hwaddr.sh) before chroot-setup so ssh-keygen -A, chmod and
+#    `systemctl enable` see our unit files / network config / scripts.
 echo "==> applying etc/ overlay"
 rsync -a "$ROOT_DIR/etc/" "$ROOTFS/etc/"
+[ -d "$ROOT_DIR/usr" ] && rsync -a "$ROOT_DIR/usr/" "$ROOTFS/usr/"
 
 # 5c. Version stamp. firmware-build's top-level build.sh exports these so
 # the image self-identifies. Stand-alone rootfs builds get "standalone".
