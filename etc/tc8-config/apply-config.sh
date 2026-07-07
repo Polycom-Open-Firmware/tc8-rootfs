@@ -61,7 +61,7 @@ log "valid config blob: $len bytes"
 PERSIST=${TC8_CFG_PERSIST:-/persist}
 SHA_MARKER="$PERSIST/.tc8-config.sha"
 SNAP="$PERSIST/tc8-config-etc"
-CFG_PATHS="/etc/default/tc8-kiosk /etc/hostname /etc/shadow /etc/localtime /etc/timezone /etc/systemd/timesyncd.conf /etc/wpa_supplicant /etc/systemd/network/25-wlan0.network /usr/local/share/ca-certificates /etc/ssl/certs"
+CFG_PATHS="/etc/default/tc8-kiosk /etc/hostname /etc/shadow /etc/localtime /etc/timezone /etc/systemd/timesyncd.conf /etc/wpa_supplicant /etc/systemd/network/25-wlan0.network /usr/local/share/ca-certificates /etc/ssl/certs /etc/tc8-profile /etc/systemd/system/default.target /etc/systemd/system/getty@tty1.service.d"
 SEALED=0; [ "$(findmnt -n -o FSTYPE / 2>/dev/null)" = overlay ] && SEALED=1
 PERSIST_OK=0; { [ -d "$PERSIST" ] && mountpoint -q "$PERSIST" 2>/dev/null; } && PERSIST_OK=1
 
@@ -135,10 +135,51 @@ EOF
 	log "configured wifi"
 }
 
+apply_profile() {
+	# Device ROLE — the wizard's Application picker writes PROFILE=<id>. The role
+	# IS the systemd default target: kiosk boots graphical.target (kiosk.service is
+	# WantedBy it); dev / smart-speaker boot multi-user.target (console + ssh, no
+	# kiosk lock). The role apps are baked (poly-<device>-profile-<id>); nothing is
+	# fetched here. Persisted via CFG_PATHS so a sealed reboot keeps the role.
+	role=${profile:-kiosk}
+	printf '%s\n' "$role" > /etc/tc8-profile
+	command -v systemctl >/dev/null 2>&1 || { log "no systemd — profile=$role recorded only"; return 0; }
+	case "$role" in
+		kiosk)
+			systemctl set-default graphical.target >/dev/null 2>&1
+			systemctl enable kiosk.service >/dev/null 2>&1 || true
+			rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf 2>/dev/null
+			log "profile=kiosk (fullscreen web kiosk)" ;;
+		dev)
+			# Console + SSH, no kiosk grab. Autologin root on tty1 for a
+			# hands-on console; ssh is already baked-enabled for provisioning.
+			systemctl set-default multi-user.target >/dev/null 2>&1
+			systemctl enable ssh.service >/dev/null 2>&1 || systemctl enable ssh >/dev/null 2>&1 || true
+			install -d /etc/systemd/system/getty@tty1.service.d
+			printf '[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin root --noclear %%I $TERM\n' \
+				> /etc/systemd/system/getty@tty1.service.d/autologin.conf
+			log "profile=dev (console + ssh, no kiosk lock)" ;;
+		smart-speaker)
+			# Voice role. Its app ships in poly-<device>-profile-smart-speaker;
+			# enable that service if it is baked in, otherwise leave a serviceable
+			# console and say so — the voice stack is not built yet.
+			systemctl set-default multi-user.target >/dev/null 2>&1
+			if systemctl list-unit-files 2>/dev/null | grep -q '^poly-smart-speaker\.service'; then
+				systemctl enable poly-smart-speaker.service >/dev/null 2>&1 || true
+				log "profile=smart-speaker"
+			else
+				log "profile=smart-speaker selected, but its app package isn't installed — booting to console"
+			fi ;;
+		*)  log "unknown PROFILE '$role' — leaving the kiosk default"
+		    systemctl set-default graphical.target >/dev/null 2>&1 ;;
+	esac
+}
+
 while IFS= read -r line || [ -n "$line" ]; do
 	case "$line" in ''|\#*) continue ;; esac
 	key=${line%%=*}; val=${line#*=}
 	case "$key" in
+		PROFILE) profile=$val ;;
 		KIOSK_URL|KIOSK_URL_FALLBACK|COG_OPTS)
 			set_kv "$KIOSK" "$key" "$val"; log "set $key" ;;
 		DEVICE_NAME)
@@ -190,6 +231,7 @@ while IFS= read -r line || [ -n "$line" ]; do
 done < "$tmp_p"
 
 apply_wifi
+apply_profile
 [ "${ca_changed:-0}" = 1 ] && update-ca-certificates 2>/dev/null
 # Persist the applied /etc so sealed reboots restore it without re-applying.
 [ "$PERSIST_OK" = 1 ] && snap_save
