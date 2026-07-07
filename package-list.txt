@@ -16,6 +16,7 @@ iproute2
 iputils-ping
 isc-dhcp-client
 openssh-server
+wpasupplicant
 
 # wayland kiosk: compositor + browser
 cage

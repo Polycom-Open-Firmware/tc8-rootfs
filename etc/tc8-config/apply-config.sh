@@ -48,6 +48,8 @@ log "valid config blob: $len bytes"
 
 # --- apply ----------------------------------------------------------------
 KIOSK=${TC8_CFG_KIOSK:-/etc/default/tc8-kiosk}   # TC8_CFG_KIOSK override = test hook
+WPA_CONF=${TC8_CFG_WPA_CONF:-/etc/wpa_supplicant/wpa_supplicant-wlan0.conf}
+WLAN_NET=${TC8_CFG_WLAN_NET:-/etc/systemd/network/25-wlan0.network}
 
 set_kv() {  # set_kv FILE KEY VALUE — replace `KEY=...` in place, else append
 	_f=$1; _k=$2; _v=$3
@@ -60,6 +62,46 @@ set_kv() {  # set_kv FILE KEY VALUE — replace `KEY=...` in place, else append
 	else
 		printf '%s=%s\n' "$_k" "$_v" >> "$_f"
 	fi
+}
+
+wifi_escape() {  # escape for a wpa_supplicant quoted string
+	printf '%s' "$1" | awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); printf "%s", $0 }'
+}
+
+apply_wifi() {
+	[ -n "${wifi_ssid+x}" ] || return 0
+	[ -n "$wifi_ssid" ] || { log "empty WIFI_SSID — skipping wifi config"; return 0; }
+
+	install -d -m 0755 "$(dirname "$WPA_CONF")" "$(dirname "$WLAN_NET")"
+	{
+		printf 'ctrl_interface=/run/wpa_supplicant\n'
+		printf 'update_config=0\n'
+		[ -n "${wifi_country:-}" ] && printf 'country=%s\n' "$(wifi_escape "$wifi_country")"
+		printf '\nnetwork={\n'
+		printf '\tssid="%s"\n' "$(wifi_escape "$wifi_ssid")"
+		printf '\tscan_ssid=1\n'
+		if [ -n "${wifi_password+x}" ] && [ -n "$wifi_password" ]; then
+			printf '\tpsk="%s"\n' "$(wifi_escape "$wifi_password")"
+		else
+			printf '\tkey_mgmt=NONE\n'
+		fi
+		printf '}\n'
+	} > "$WPA_CONF"
+	chmod 0600 "$WPA_CONF"
+
+	cat > "$WLAN_NET" <<'EOF'
+[Match]
+Name=wlan0
+
+[Network]
+DHCP=yes
+EOF
+
+	if command -v systemctl >/dev/null 2>&1; then
+		systemctl enable wpa_supplicant@wlan0.service >/dev/null 2>&1 || true
+		systemctl restart wpa_supplicant@wlan0.service systemd-networkd.service >/dev/null 2>&1 || true
+	fi
+	log "configured wifi"
 }
 
 while IFS= read -r line || [ -n "$line" ]; do
@@ -88,6 +130,9 @@ while IFS= read -r line || [ -n "$line" ]; do
 			else log "unknown timezone '$val'"; fi ;;
 		NTP_SERVER)
 			set_kv /etc/systemd/timesyncd.conf NTP "$val"; log "set NTP server" ;;
+		WIFI_SSID) wifi_ssid=$val ;;
+		WIFI_PASSWORD) wifi_password=$val ;;
+		WIFI_COUNTRY) wifi_country=$val ;;
 		CA_CERT_B64)
 			install -d -m 0755 /usr/local/share/ca-certificates
 			ca_n=$(( ${ca_n:-0} + 1 ))
@@ -100,6 +145,7 @@ while IFS= read -r line || [ -n "$line" ]; do
 	esac
 done < "$tmp_p"
 
+apply_wifi
 [ "${ca_changed:-0}" = 1 ] && update-ca-certificates 2>/dev/null
 log "config applied"
 exit 0
