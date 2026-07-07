@@ -138,6 +138,14 @@ TC8_BUILD_HOST="${TC8_BUILD_HOST:-$(hostname)}"
 VER
 chmod 0644 "$ROOTFS/etc/tc8-version"
 
+# Baseline clock: stamp build time into fake-hwclock.data so a device flashed
+# WITHOUT a config blob (or before it applies) still boots with a roughly-right
+# clock instead of 1970 — enough for TLS. The provisioner's CONFIG_TIME (flash
+# time, fresher) advances it further; NTP corrects it once there's a network.
+# Format is what `fake-hwclock save` writes: UTC "YYYY-MM-DD HH:MM:SS".
+date -u +"%Y-%m-%d %H:%M:%S" > "$ROOTFS/etc/fake-hwclock.data"
+chmod 0644 "$ROOTFS/etc/fake-hwclock.data"
+
 
 # Bind /proc /sys /dev for chroot-setup's apt + ssh-keygen.
 mount --bind /proc "$ROOTFS/proc"

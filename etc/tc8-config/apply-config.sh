@@ -130,6 +130,19 @@ while IFS= read -r line || [ -n "$line" ]; do
 			else log "unknown timezone '$val'"; fi ;;
 		NTP_SERVER)
 			set_kv /etc/systemd/timesyncd.conf NTP "$val"; log "set NTP server" ;;
+		CONFIG_TIME)
+			# FORWARD-ONLY clock bump. The provisioner stamps the flash time
+			# (epoch) here so an offline device (no DHCP, no NTP) still boots
+			# with a roughly-right clock — enough for TLS cert validity and
+			# sane log timestamps. Never move BACKWARD: if NTP already synced
+			# (or fake-hwclock holds a newer time), keep the real time.
+			case "$val" in
+				''|*[!0-9]*) log "bad CONFIG_TIME '$val'" ;;
+				*)  now=$(date +%s)
+				    if [ "$val" -gt "$now" ]; then
+				        date -s "@$val" >/dev/null 2>&1 				          && { command -v fake-hwclock >/dev/null 2>&1 && fake-hwclock save; 				               log "advanced clock to flash time ($(date -u -d @$val +%Y-%m-%dT%H:%MZ))"; }
+				    else log "clock already >= CONFIG_TIME, leaving it"; fi ;;
+			esac ;;
 		WIFI_SSID) wifi_ssid=$val ;;
 		WIFI_PASSWORD) wifi_password=$val ;;
 		WIFI_COUNTRY) wifi_country=$val ;;
