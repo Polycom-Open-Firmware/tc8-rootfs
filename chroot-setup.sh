@@ -150,6 +150,7 @@ systemctl enable systemd-networkd
 systemctl enable systemd-resolved
 systemctl enable systemd-timesyncd
 systemctl enable seatd.service
+systemctl enable tc8-persist-root.service
 # tc8-config: apply a fastboot-pushed config blob from the cache partition first
 chmod 0755 /etc/tc8-config/apply-config.sh 2>/dev/null || true
 systemctl enable tc8-config.service

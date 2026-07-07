@@ -1,0 +1,13 @@
+[Unit]
+Description=Bind persistent facres storage onto /root
+Documentation=file:///usr/local/sbin/tc8-persist-root.sh
+After=local-fs.target systemd-udev-settle.service
+Before=tc8-config.service ssh.service kiosk-config.service kiosk.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/tc8-persist-root.sh
+
+[Install]
+WantedBy=multi-user.target
