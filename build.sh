@@ -75,10 +75,10 @@ setup_dev() {
     [ -e "$d/urandom" ] || mknod -m 444 "$d/urandom" c 1 9
     [ -e "$d/tty"     ] || mknod -m 666 "$d/tty"     c 5 0
     [ -e "$d/console" ] || mknod -m 600 "$d/console" c 5 1
-    ln -sf /proc/self/fd "$d/fd"
-    ln -sf /proc/self/fd/0 "$d/stdin"
-    ln -sf /proc/self/fd/1 "$d/stdout"
-    ln -sf /proc/self/fd/2 "$d/stderr"
+    ln -sfn /proc/self/fd "$d/fd"       # -n: replace the symlink, don't follow into it
+    ln -sfn /proc/self/fd/0 "$d/stdin"
+    ln -sfn /proc/self/fd/1 "$d/stdout"
+    ln -sfn /proc/self/fd/2 "$d/stderr"
     mkdir -p "$d/pts" "$d/shm"
     mountpoint -q "$d/pts" || mount -t devpts -o mode=0620,gid=5,ptmxmode=666 devpts "$d/pts" 2>/dev/null || true
     mountpoint -q "$d/shm" || mount -t tmpfs tmpfs "$d/shm" 2>/dev/null || true
