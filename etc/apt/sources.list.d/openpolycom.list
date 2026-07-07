@@ -1,0 +1,4 @@
+# OpenPolycom package archive — profiles, apps, base plumbing.
+# Key: usr/share/keyrings (ed25519 7A27D57B0045457E4C51A11EFAABA6E245033620);
+# repo conventions: github.com/Polycom-Open-Firmware/apt
+deb [arch=arm64 signed-by=/usr/share/keyrings/openpolycom-archive-keyring.gpg] https://pub-1d222577af244182a265fc4d6a35b994.r2.dev stable main
