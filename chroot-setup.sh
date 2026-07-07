@@ -249,7 +249,8 @@ chmod 0755 /usr/local/sbin/tc8-usb-gadget.sh
 # Network config for the NCM-side usb0 interface (panel = 10.55.0.1/24).
 # Host is expected to take 10.55.0.2 (or run dhclient if you add a server later).
 install -d -m 0755 /etc/systemd/network
-# umtprd config — exports /data as a single MTP storage to the host.
+# umtprd config — exports the PERSISTENT /root (facres-backed, survives
+# reflashes) as the MTP storage, not the whole filesystem.
 install -d -m 0755 /etc/umtprd
 cat > /etc/umtprd/umtprd.conf <<'UMTP'
 # uMTP-Responder config for the TC8 panel.
@@ -268,7 +269,7 @@ serial       = "TC8"
 
 # storage = <path>, <description>, <flags>
 # flags: locked | always_locked | read_only | (empty for rw)
-storage = "/data", "Panel storage",
+storage = "/root", "Root home (persistent)",
 
 # Stay attached after first transfer
 loop_on_unlock = no
@@ -280,7 +281,8 @@ cat > /etc/systemd/system/tc8-mtp.service <<'MTP'
 [Unit]
 Description=TC8 MTP responder (umtprd over FunctionFS)
 Requires=tc8-usb-gadget.service
-After=tc8-usb-gadget.service
+# After persist-root so MTP serves the facres-backed /root, not the bare dir.
+After=tc8-usb-gadget.service tc8-persist-root.service
 ConditionPathExists=/dev/ffs-mtp/ep0
 
 [Service]
