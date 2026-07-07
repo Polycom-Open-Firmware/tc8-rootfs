@@ -9,6 +9,13 @@ DEV=${TC8_PERSIST_DEV:-/dev/disk/by-partlabel/facres}
 MNT=${TC8_PERSIST_MNT:-/persist}
 ROOT=${TC8_PERSIST_ROOT:-$MNT/tc8-root}
 
+# udev may still be settling when we run; give the by-partlabel symlink a
+# moment instead of silently booting without persistence.
+tries=0
+while [ ! -e "$DEV" ] && [ "$tries" -lt 50 ]; do
+	sleep 0.2
+	tries=$((tries + 1))
+done
 [ -e "$DEV" ] || { log "no facres partition -- keeping /root on userdata"; exit 0; }
 
 fstype=$(blkid -o value -s TYPE "$DEV" 2>/dev/null || true)
