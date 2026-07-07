@@ -217,6 +217,10 @@ for prof in "${PLIST[@]}"; do
     mkdir -p "$PTREE/proc" "$PTREE/sys"   # excluded from clone; recreate mount points
     mount -t proc proc "$PTREE/proc"; mount --rbind /sys "$PTREE/sys"
     setup_dev "$PTREE"   # private /dev (not a bind of the host's — see setup_dev)
+    # /etc/resolv.conf is a symlink into /run (excluded from the clone) — give
+    # the profile chroot a real one so its apt can resolve the archive.
+    rm -f "$PTREE/etc/resolv.conf"
+    printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > "$PTREE/etc/resolv.conf"
     echo "==> profile $prof: apt install poly-tc8-profile-$prof"
     chroot "$PTREE" sh -c "apt-get update && \
         DEBIAN_FRONTEND=noninteractive apt-get install -y poly-tc8-profile-$prof && \
