@@ -187,7 +187,7 @@ for prof in "${PLIST[@]}"; do
     PTREE="$WORK/profile-$prof"
     echo "==> profile $prof: cloning base"
     rm -rf "$PTREE"; mkdir -p "$PTREE"
-    rsync -aHAX "$ROOTFS/" "$PTREE/"
+    rsync -aHAX --exclude=/proc/ --exclude=/sys/ --exclude=/dev/ --exclude=/run/ "$ROOTFS/" "$PTREE/"
     cp /usr/bin/qemu-aarch64-static "$PTREE/usr/bin/"
     mount -t proc proc "$PTREE/proc"; mount --rbind /sys "$PTREE/sys"
     mount --rbind /dev "$PTREE/dev"
