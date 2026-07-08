@@ -15,7 +15,7 @@ URL="${KIOSK_URL:-https://duckduckgo.com/}"
 case "${KIOSK_ENGINE:-webkit}" in
 chromium)
 	if [ -x /usr/bin/chromium ]; then
-		exec /usr/bin/cage -d -s -- /usr/bin/chromium \
+		exec /usr/bin/cage -r -s -- /usr/bin/chromium \
 			--kiosk --no-first-run --disable-infobars \
 			--ozone-platform=wayland ${CHROMIUM_OPTS} "$URL"
 	fi
