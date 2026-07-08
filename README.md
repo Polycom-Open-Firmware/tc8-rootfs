@@ -92,10 +92,10 @@ reboot. Two escape hatches ship in this repo:
   and binds `/persist/tc8-root` onto `/root`. facres is never touched
   by the provisioner, so root's home survives reboots *and* reflashes.
   The saved fake-hwclock timestamp is persisted there too.
-- **Maintenance mode** — `tc8-rw [--reboot]` sets a sticky flag on
+- **Maintenance mode** — `tc8-rw [--reboot]` (alias `poly-open`) sets a sticky flag on
   facres (`/persist/.tc8-rootfs-rw`); the next boot mounts the rootfs
   direct-rw with **no** overlay, so `apt install` etc. are safe and
-  permanent. `tc8-ro && reboot` reseals. `tc8-mode` reports the current
+  permanent. `tc8-ro && reboot` (alias `poly-pin`) reseals. `tc8-mode` reports the current
   and next-boot mode, and interactive logins get a banner while in
   maintenance mode (`etc/profile.d/tc8-mode.sh`).
 
