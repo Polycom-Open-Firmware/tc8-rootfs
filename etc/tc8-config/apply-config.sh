@@ -16,8 +16,17 @@
 
 log() { echo "tc8-config: $*"; }
 
+# Sealed boots: the initramfs applies (and consumes) the blob BEFORE the
+# overlay seals — this runtime service must not touch it there (an in-overlay
+# apply would evaporate at reboot while still destroying the blob). It exists
+# for direct-rw boots and for targets without an initramfs (C60 today).
+if [ "$(findmnt -n -o FSTYPE / 2>/dev/null)" = overlay ]; then
+	log "sealed boot — the initramfs owns the config blob; nothing to do"
+	exit 0
+fi
+
 DEV=${TC8_CFG_DEV:-/dev/disk/by-partlabel/cache}   # TC8_CFG_DEV override = test hook
-[ -e "$DEV" ] || { log "no cache partition — skipping"; exit 0; }
+[ -e "$DEV" ] || { log "no cache partition — nothing to do"; exit 0; }
 
 tmp_h=$(mktemp) || exit 0
 tmp_p=$(mktemp) || exit 0
@@ -27,13 +36,13 @@ trap 'rm -f "$tmp_h" "$tmp_p"' EXIT
 dd if="$DEV" of="$tmp_h" bs=64 count=1 2>/dev/null
 
 magic=$(dd if="$tmp_h" bs=1 count=8 2>/dev/null)
-[ "$magic" = "TC8CFGv1" ] || { log "no config blob (magic mismatch) — skipping"; exit 0; }
+[ "$magic" = "TC8CFGv1" ] || { log "no config blob — nothing to do"; exit 0; }
 
 # payload length: u32 LE at offset 8 (parse 4 bytes portably, no od --endian)
 set -- $(od -An -tu1 -j8 -N4 "$tmp_h")
 len=$(( ${1:-0} + ${2:-0} * 256 + ${3:-0} * 65536 + ${4:-0} * 16777216 ))
 if [ "$len" -le 0 ] || [ "$len" -gt 1048576 ]; then
-	log "implausible payload length ($len) — skipping"; exit 0
+	log "implausible payload length ($len) — ignoring blob"; exit 0
 fi
 
 want=$(od -An -tx1 -j12 -N32 "$tmp_h" | tr -d ' \n')
@@ -46,35 +55,11 @@ if [ "$got" != "$want" ]; then
 fi
 log "valid config blob: $len bytes"
 
-# --- apply-once gating ----------------------------------------------------
-# The full apply (chpasswd, CA install, hostname, wifi, kiosk URL…) runs ONCE
-# per unique config blob — re-running it on every boot is noisy and can fight
-# live changes. The blob's payload sha ($got) identifies the config; the marker
-# lives on facres (persistent). A plain reboot has the same blob → skip. A
-# re-provision writes a new blob → new sha → fresh apply.
-#
-# Sealed-mode wrinkle: with the rootfs behind a tmpfs overlay, /etc is
-# ephemeral, so "just skip" would revert to baked defaults. So on an
-# unchanged-config SEALED boot we silently restore the persisted /etc snapshot
-# instead of re-applying. In direct-rw (maintenance) mode /etc persists on its
-# own, so we simply skip and leave whatever's there.
-PERSIST=${TC8_CFG_PERSIST:-/persist}
-SHA_MARKER="$PERSIST/.tc8-config.sha"
-SNAP="$PERSIST/tc8-config-etc"
-CFG_PATHS="/etc/default/tc8-kiosk /etc/hostname /etc/shadow /etc/localtime /etc/timezone /etc/systemd/timesyncd.conf /etc/wpa_supplicant /etc/systemd/network/25-wlan0.network /usr/local/share/ca-certificates /etc/ssl/certs /etc/tc8-profile /etc/systemd/system/default.target /etc/systemd/system/getty@tty1.service.d"
-SEALED=0; [ "$(findmnt -n -o FSTYPE / 2>/dev/null)" = overlay ] && SEALED=1
-PERSIST_OK=0; { [ -d "$PERSIST" ] && mountpoint -q "$PERSIST" 2>/dev/null; } && PERSIST_OK=1
-
-snap_restore() { for _p in $CFG_PATHS; do [ -e "$SNAP$_p" ] || continue; mkdir -p "$(dirname "$_p")"; cp -a "$SNAP$_p" "$(dirname "$_p")/" 2>/dev/null || true; done; }
-snap_save()    { rm -rf "$SNAP"; for _p in $CFG_PATHS; do [ -e "$_p" ] || continue; mkdir -p "$SNAP$(dirname "$_p")"; cp -a "$_p" "$SNAP$(dirname "$_p")/" 2>/dev/null || true; done; printf '%s\n' "$got" > "$SHA_MARKER"; }
-
-if [ "$PERSIST_OK" = 1 ] && [ "$(cat "$SHA_MARKER" 2>/dev/null)" = "$got" ]; then
-	if [ "$SEALED" = 1 ] && [ -d "$SNAP" ]; then
-		snap_restore; log "config unchanged — restored persisted state (apply-once)"; exit 0
-	elif [ "$SEALED" = 0 ]; then
-		log "config unchanged — already applied (apply-once)"; exit 0
-	fi
-fi
+# --- consume-once -----------------------------------------------------------
+# A present, valid blob is ALWAYS applied: after a successful apply the blob
+# is invalidated in place (header zeroed), so next boots find no blob and just
+# restore the snapshot. Applying a config is explicit intent — it overwrites
+# whatever is on the device, including maintenance-mode edits.
 log "applying config (new, changed, or first boot)"
 
 # --- apply ----------------------------------------------------------------
@@ -141,6 +126,9 @@ apply_profile() {
 	# WantedBy it); dev / smart-speaker boot multi-user.target (console + ssh, no
 	# kiosk lock). The role apps are baked (poly-<device>-profile-<id>); nothing is
 	# fetched here. Persisted via CFG_PATHS so a sealed reboot keeps the role.
+	# Only act when the blob carried a PROFILE key. A config-only push (wifi,
+	# passwords, …) must NOT reset an existing role to the kiosk default.
+	[ -n "${profile+x}" ] || return 0
 	role=${profile:-kiosk}
 	printf '%s\n' "$role" > /etc/tc8-profile
 	command -v systemctl >/dev/null 2>&1 || { log "no systemd — profile=$role recorded only"; return 0; }
@@ -233,7 +221,12 @@ done < "$tmp_p"
 apply_wifi
 apply_profile
 [ "${ca_changed:-0}" = 1 ] && update-ca-certificates 2>/dev/null
-# Persist the applied /etc so sealed reboots restore it without re-applying.
-[ "$PERSIST_OK" = 1 ] && snap_save
+# Invalidate the consumed blob — the blob is a MESSAGE, not a store. Device
+# state lives in the filesystem (+ the /persist snapshot for sealed boots);
+# the blob delivers intent once and is destroyed. (Zero the 64-byte config
+# header only — the staged-bootloader region at 1 MiB has its own consumer.)
+dd if=/dev/zero of="$DEV" bs=64 count=1 conv=notrunc 2>/dev/null && sync \
+	&& log "config blob consumed (invalidated)" \
+	|| log "WARNING: could not invalidate the blob — it will re-apply next boot"
 log "config applied"
 exit 0

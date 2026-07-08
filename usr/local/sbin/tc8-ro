@@ -16,6 +16,7 @@ else
 	echo "tc8-ro: maintenance flag was not set — nothing to do."
 fi
 
+
 if grep -q '^overlay / ' /proc/mounts; then
 	echo "tc8-ro: (this boot is already overlay mode)"
 else
