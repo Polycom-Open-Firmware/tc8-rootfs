@@ -71,22 +71,21 @@ Per-build defaults live in `etc/`:
   `CHROMIUM_OPTS`
 - `etc/tc8-kiosk/weston.ini` — compositor config: kiosk-shell,
   `xwayland=false`, output rotation via `transform=rotate-90`
-- `etc/systemd/system/{kiosk,kiosk-config,kiosk-vt}.service` —
+- `etc/systemd/system/{kiosk,kiosk-vt}.service` —
   kiosk-on-tty7 service (runs `kiosk-launch`, which starts weston with
   kiosk-shell and then the browser selected by `KIOSK_ENGINE`: cog by
-  default, chromium when installed) + a oneshot that overrides config
-  from `/data/poly-kiosk/config` if present + an explicit `chvt 7`
-  helper; `kiosk-config.service` orders itself after the `/data` mount
-  (`After=data.mount` / `Wants=data.mount`)
+  default, chromium when installed) + an explicit `chvt 7` helper
 - `etc/udev/rules.d/{50-drm,70-seat}.rules` — gives the `kiosk` user
   group access to `/dev/dri/*` and seat-tags `/dev/input/event*` so
   libinput finds the Goodix touchscreen
 - `etc/environment.d/99-vpu.conf` — biases GStreamer toward the
   v4l2 stateless decoders (Hantro G1/G2) over libav
 
-Per-device overrides live on `/data/poly-kiosk/config`
-(populated separately during deployment); `kiosk-config.service` reads
-that at boot if present.
+Per-device values arrive via the config blob: the provisioning wizard
+writes a blob to the `cache` partition and
+`etc/tc8-config/apply-config.sh` applies it at boot, writing keys such as
+`KIOSK_URL` into `/etc/default/tc8-kiosk` (contract:
+`CONFIG-PARTITION.md` in `poly-firmware-build`).
 
 ## Read-only rootfs, overlay writes, persistent /root
 
@@ -121,10 +120,10 @@ build gets a fresh, unique set of host keys.  Keys are not committed
 to this repo.  If you build the same rootfs twice on different
 machines you'll get different keys; that's intentional.
 
-For per-panel keys (rather than per-build), generate them on first
-boot and stash under `/data/poly-kiosk/ssh-host-keys/` — the `/data`
-partition is shared between A/B slots, so generated keys persist
-across slot swaps.
+SSH host keys are generated at build (`ssh-keygen -A`, copied to
+`/etc/ssh/baked/`) and are the same across every panel from one image.
+Per-panel keys would need generating into persistent storage
+(the `facres`/`persist` partition, which survives reflash).
 
 ## Known limitations
 
