@@ -1,7 +1,7 @@
 [Unit]
 Description=TC8 fullscreen kiosk (weston + browser)
-After=systemd-user-sessions.service seatd.service kiosk-config.service tc8-persist-root.service
-Wants=seatd.service kiosk-config.service
+After=systemd-user-sessions.service seatd.service tc8-persist-root.service
+Wants=seatd.service
 ConditionPathExists=/dev/dri/card0
 
 [Service]

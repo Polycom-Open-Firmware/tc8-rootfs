@@ -2,9 +2,9 @@
 Description=Apply TC8 config blob pushed to the cache partition (provisioning wizard)
 Documentation=file:///etc/tc8-config/apply-config.sh
 # Needs /dev/disk/by-partlabel + a writable /etc; runs before the kiosk reads its
-# env. Ordered before kiosk-config.service so a local /data override still wins.
+# env. Ordered before so a local /data override still wins.
 After=local-fs.target tc8-persist-root.service
-Before=systemd-networkd.service wpa_supplicant@wlan0.service kiosk-config.service kiosk.service
+Before=systemd-networkd.service wpa_supplicant@wlan0.service kiosk.service
 
 [Service]
 Type=oneshot

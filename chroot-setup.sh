@@ -162,7 +162,6 @@ chmod 0755 /etc/tc8-config/apply-config.sh 2>/dev/null || true
 systemctl enable tc8-config.service
 chmod 0755 /etc/tc8-config/update-bootloader.sh 2>/dev/null || true
 systemctl enable tc8-update-bootloader.service
-systemctl enable kiosk-config.service
 systemctl enable kiosk-vt.service
 systemctl enable kiosk.service
 # USB CDC ACM gadget: end-user console access via the panel's USB data port.
