@@ -11,7 +11,7 @@ DEV=${TC8_PERSIST_DEV:-/dev/disk/by-partlabel/facres}
 MNT=${TC8_PERSIST_MNT:-/persist}
 ROOT=${TC8_PERSIST_ROOT:-$MNT/tc8-root}
 
-# udev may still be settling when we run; give the by-partlabel symlink a
+# udev may still be settling at boot; give the by-partlabel symlink a
 # moment instead of silently booting without persistence.
 tries=0
 while [ ! -e "$DEV" ] && [ "$tries" -lt 50 ]; do
@@ -33,7 +33,7 @@ if ! mountpoint -q "$MNT"; then
 fi
 
 # Purge stock Polycom Android app/bin staging the factory left on facres. These
-# are APK bundles for the Android OS we replaced -- inert on our Debian firmware
+# are APK bundles for the stock Android OS -- inert on the Debian firmware
 # and ~600 MB of dead weight. Idempotent: wipes on first boot, no-op thereafter.
 for stale in app bin; do
 	[ -e "$MNT/$stale" ] && rm -rf "$MNT/$stale" && log "purged stock /persist/$stale"
@@ -43,8 +43,13 @@ done
 # library/settings survive reboots and reflashes alongside /root.
 install -d -m 0755 -o 1000 -g 1000 "$MNT/kodi-home"
 # The media library (Kodi's "Local media" source; exported over MTP as
-# "Media"): drag-and-drop content that survives reboots and reflashes.
+# "Media"): drag-and-drop content that survives reboots and reflashes. The
+# type subdirs give MTP a clear drop target per kind; the photo-frame mode
+# slideshows "photos" (pictures only, no video/music mixed in).
 install -d -m 0775 -o 1000 -g 1000 "$MNT/media"
+for sub in photos music video; do
+	install -d -m 0775 -o 1000 -g 1000 "$MNT/media/$sub"
+done
 
 install -d -m 0700 "$ROOT"
 if [ ! -e "$ROOT/.tc8-root-initialized" ]; then

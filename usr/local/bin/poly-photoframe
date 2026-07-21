@@ -8,7 +8,11 @@ set -eu
 [ "${MEDIA_MODE:-full}" = "photoframe" ] || exit 0
 
 RPC=http://127.0.0.1:8080/jsonrpc
-DIR=${MEDIA_SOURCE:-/persist/media}
+# A photo frame slideshows pictures. Point at a pictures-only path: the local
+# photos folder by default, or MEDIA_SOURCE if set (a network pictures share).
+# A recursive open over a mixed tree (photos + video + music) makes Kodi spawn
+# a video player and a folder-picker dialog alongside the slideshow.
+DIR=${MEDIA_SOURCE:-/persist/media/photos}
 
 # Wait for Kodi's web server (kiosk.service starts in parallel; first boot
 # includes Kodi's own init).

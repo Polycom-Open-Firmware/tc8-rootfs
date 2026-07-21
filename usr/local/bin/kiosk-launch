@@ -6,7 +6,7 @@
 # Weston (kiosk-shell) is the compositor — chosen over cage because it is the
 # reference Wayland implementation and, unlike the cage in Debian bookworm,
 # emits wl_touch.frame, which strict clients (chromium, GTK, Qt) require for
-# touch input. Weston runs as our background child; the browser then connects
+# touch input. Weston runs as a background child; the browser then connects
 # as a client and kiosk-shell fullscreens it.
 #
 # KIOSK_ENGINE selects the client:
@@ -47,15 +47,40 @@ kodi)
 			[ -w "$h" ] && { HOME=$h; break; }
 		done
 		export HOME
-		# Seed per-panel Kodi config (idempotent; the home is ours):
+		# Seed per-panel Kodi config (idempotent; the home is kiosk-owned):
 		# web server on (remote control + the photo-frame autostart), and
 		# media sources from /etc/default/poly-media (MEDIA_SOURCE) plus
 		# the always-present local /persist/media.
 		. /etc/default/poly-media 2>/dev/null || true
 		UD="$HOME/.kodi/userdata"; mkdir -p "$UD"
 		GS="$UD/guisettings.xml"
-		[ -f "$GS" ] || printf '<settings version="2">\n    <setting id="services.webserver">true</setting>\n    <setting id="services.webserverauthentication">false</setting>\n</settings>\n' > "$GS"
-		grep -q 'id="services.webserver"' "$GS" || sed -i 's|</settings>|    <setting id="services.webserver">true</setting>\n    <setting id="services.webserverauthentication">false</setting>\n</settings>|' "$GS"
+		[ -f "$GS" ] || printf '<settings version="2">\n</settings>\n' > "$GS"
+		# gs_set FILE ID VALUE — pin a guisettings value as a valued element,
+		# not only-if-absent. Kodi records a default-valued setting as
+		# default="true" and then ignores the element value, so a persisted
+		# guisettings.xml (facres survives reflashes) can pin a setting to the
+		# wrong value. Replace any existing entry (valued or self-closing),
+		# else insert it.
+		gs_set() {
+			if grep -q "id=\"$2\"" "$1"; then
+				sed -i -E "s#<setting id=\"$2\"[^>]*/>#<setting id=\"$2\">$3</setting>#; s#<setting id=\"$2\"[^>]*>[^<]*</setting>#<setting id=\"$2\">$3</setting>#" "$1"
+			else
+				sed -i "s|</settings>|    <setting id=\"$2\">$3</setting>\n</settings>|" "$1"
+			fi
+		}
+		# Web server on (remote control + the photo-frame autostart).
+		gs_set "$GS" services.webserver true
+		gs_set "$GS" services.webserverauthentication false
+		# TC8 (tas5751 SAI) audio: the codec is 48k-family + stereo-only and
+		# Kodi disables ALSA resampling, so it opens the sink at the source
+		# rate (e.g. 44100 mono) and the hardware rejects it. Pin a fixed
+		# 48000/stereo output; Kodi resamples to it internally. Gated on the
+		# card — the C60's codec has no such constraint.
+		if grep -qi tas5751 /proc/asound/cards 2>/dev/null; then
+			gs_set "$GS" audiooutput.config 1
+			gs_set "$GS" audiooutput.samplerate 48000
+			gs_set "$GS" audiooutput.channels 2
+		fi
 		SRC="$UD/sources.xml"
 		if [ ! -f "$SRC" ] || grep -q "poly-media-setup" "$SRC"; then
 			{
