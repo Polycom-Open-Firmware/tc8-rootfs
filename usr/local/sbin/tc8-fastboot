@@ -1,0 +1,37 @@
+#!/bin/sh
+# tc8-fastboot — reboot into the bootloader's fastboot gadget from a booted
+# system, without touch or power-cycle access. Writes the one-shot AOSP
+# bootloader-message command ("bootonce-bootloader", misc offset 0); the
+# bootloader consumes it — clears the field, then starts `fastboot usb 0` —
+# so the next power cycle boots normally again. The provisioner talks to
+# the gadget exactly as it does after the 4-finger gesture.
+#
+#   tc8-fastboot             # blank the panel, reboot into fastboot
+#   tc8-fastboot --no-blank  # keep the display as-is (debugging)
+#
+# The panel is blanked first: fastboot mode does not drive the display, so
+# whatever was last drawn would otherwise stay latched on the panel the
+# whole time the device sits in fastboot.
+
+set -eu
+
+MISC=/dev/disk/by-partlabel/misc
+[ -b "$MISC" ] || { echo "tc8-fastboot: no misc partition" >&2; exit 1; }
+
+if [ "${1:-}" != "--no-blank" ]; then
+	# Stop the compositor, paint the framebuffer black, power the panel
+	# down. All best-effort — a failed blank must not block the reboot.
+	systemctl stop kiosk.service 2>/dev/null || true
+	if [ -e /dev/fb0 ]; then
+		cat /dev/zero > /dev/fb0 2>/dev/null || true
+		echo 4 > /sys/class/graphics/fb0/blank 2>/dev/null || true
+	fi
+fi
+
+# NUL the 32-byte command field, then write the command — no remnants of
+# any longer previous command.
+dd if=/dev/zero of="$MISC" bs=32 count=1 conv=notrunc 2>/dev/null
+printf 'bootonce-bootloader' | dd of="$MISC" conv=notrunc 2>/dev/null
+sync
+echo "tc8-fastboot: rebooting into fastboot — power-cycle to boot normally."
+exec systemctl reboot
